@@ -7,11 +7,10 @@ Original file is located at
     https://colab.research.google.com/drive/1KGGMRE3le5EBZtzyehW280sMeXGXyhR4
 """
 
+    
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-import plotly.graph_objects as go
-import geopandas as gpd
 
 st.set_page_config(layout="wide")
 
@@ -22,32 +21,39 @@ df = pd.read_csv("gvsudegree_clean.csv", low_memory=False)
 
 df['Graduated'] = pd.to_numeric(df['Graduated'], errors='coerce').fillna(0)
 
-df['stfip'] = pd.to_numeric(df['stfip'], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(2)
-df['fips'] = pd.to_numeric(df['fips'], errors='coerce').fillna(0).astype(int).astype(str).str.zfill(5)
+df['stfip'] = (
+    pd.to_numeric(df['stfip'], errors='coerce')
+    .fillna(0).astype(int).astype(str).str.zfill(2)
+)
+
+df['fips'] = (
+    pd.to_numeric(df['fips'], errors='coerce')
+    .fillna(0).astype(int).astype(str).str.zfill(5)
+)
 
 us_df = df.copy()
 mi_df = df[df['stfip'] == '26'].copy()
 
 # =====================================================
-# LAYOUT (SIDEBAR TABLE OF CONTENTS)
+# SIDEBAR (TABLE OF CONTENTS)
 # =====================================================
 st.sidebar.markdown(
     """
     <div style='background-color:#ADD8E6; padding:20px'>
-    <h3 style='text-align:center;'>Contents</h3>
-    <ul>
+    <h3 style='text-align:center;'>Table of Contents</h3>
+    <ol>
         <li>National Distribution</li>
         <li>Michigan Distribution</li>
         <li>State Level Table</li>
         <li>County Level Table</li>
-    </ul>
+    </ol>
     </div>
     """,
     unsafe_allow_html=True
 )
 
 # =====================================================
-# NATIONAL MAP
+# NATIONAL DISTRIBUTION
 # =====================================================
 st.markdown("<h2 style='text-align:center;'>National Distribution</h2>", unsafe_allow_html=True)
 
@@ -64,22 +70,16 @@ fig_us = px.choropleth(
 
 fig_us.update_layout(
     paper_bgcolor='lightgrey',
-    plot_bgcolor='lightgrey'
+    plot_bgcolor='lightgrey',
+    margin=dict(l=10, r=10, t=40, b=10)
 )
 
 st.plotly_chart(fig_us, use_container_width=True)
 
 # =====================================================
-# MICHIGAN MAP
+# MICHIGAN DISTRIBUTION
 # =====================================================
 st.markdown("<h2 style='text-align:center;'>Michigan Distribution</h2>", unsafe_allow_html=True)
-
-counties = gpd.read_file(
-    "https://www2.census.gov/geo/tiger/GENZ2020/shp/cb_2020_us_county_20m.zip"
-)
-
-mi_counties = counties[counties['STATEFP'] == '26'].copy()
-mi_counties['GEOID'] = mi_counties['STATEFP'] + mi_counties['COUNTYFP']
 
 majors = ['All'] + sorted(mi_df['Major'].dropna().unique())
 selected_major = st.selectbox("Select Major", majors)
@@ -91,30 +91,22 @@ else:
 
 county_df = dff.groupby('fips', as_index=False)['Graduated'].sum()
 
-mi_map = mi_counties.merge(
+fig_mi = px.choropleth(
     county_df,
-    left_on='GEOID',
-    right_on='fips',
-    how='left'
+    geojson="https://raw.githubusercontent.com/plotly/datasets/master/geojson-counties-fips.json",
+    locations='fips',
+    color='Graduated',
+    color_continuous_scale='Blues',
+    scope='usa'
 )
-
-mi_map['Graduated'] = mi_map['Graduated'].fillna(0)
-
-fig_mi = go.Figure()
-
-fig_mi.add_trace(go.Choropleth(
-    geojson=mi_map.__geo_interface__,
-    locations=mi_map['GEOID'],
-    z=mi_map['Graduated'],
-    featureidkey="properties.GEOID",
-    colorscale="Blues"
-))
 
 fig_mi.update_layout(
     paper_bgcolor='lightgrey',
     plot_bgcolor='lightgrey',
-    height=600
+    margin=dict(l=10, r=10, t=40, b=10)
 )
+
+fig_mi.update_geos(fitbounds="locations", visible=False)
 
 st.plotly_chart(fig_mi, use_container_width=True)
 
@@ -126,12 +118,19 @@ st.markdown("<h2 style='text-align:center;'>State Level Table</h2>", unsafe_allo
 state_table = us_df.groupby('stfip', as_index=False)['Graduated'].sum()
 
 total = state_table['Graduated'].sum()
-state_table['Share'] = (state_table['Graduated']/total*100).round(2)
+state_table['Share of Total'] = (state_table['Graduated']/total*100).round(2)
+
+st.markdown(
+    "<div style='background-color:#E6F2FF; padding:10px; border-radius:10px'>",
+    unsafe_allow_html=True
+)
 
 st.dataframe(
     state_table.sort_values('Graduated', ascending=False),
     use_container_width=True
 )
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 # =====================================================
 # COUNTY TABLE
@@ -141,9 +140,16 @@ st.markdown("<h2 style='text-align:center;'>County Level Table</h2>", unsafe_all
 county_table = county_df.copy()
 
 total = county_table['Graduated'].sum()
-county_table['Share'] = (county_table['Graduated']/total*100).round(2)
+county_table['Share of Total'] = (county_table['Graduated']/total*100).round(2)
+
+st.markdown(
+    "<div style='background-color:#E6F2FF; padding:10px; border-radius:10px'>",
+    unsafe_allow_html=True
+)
 
 st.dataframe(
     county_table.sort_values('Graduated', ascending=False),
     use_container_width=True
 )
+
+st.markdown("</div>", unsafe_allow_html=True)
